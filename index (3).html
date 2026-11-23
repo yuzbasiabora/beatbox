@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<!--
+  Beatbox: a drum machine and step sequencer in one HTML file. No samples, no libraries:
+  every sound is synthesised with the Web Audio API. Export your beat as a WAV file.
+  MIT License, Copyright (c) 2026
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Beatbox: a drum machine you can play in your browser. Synthesised drums, bass and pluck, presets, WAV export.">
+<meta name="theme-color" content="#0b0e17">
+<title>Beatbox: drum machine</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230b0e17'/%3E%3Crect x='14' y='14' width='32' height='32' rx='7' fill='%23ff5c7a'/%3E%3Crect x='54' y='14' width='32' height='32' rx='7' fill='%234fd1c5'/%3E%3Crect x='14' y='54' width='32' height='32' rx='7' fill='%23ffe66d'/%3E%3Crect x='54' y='54' width='32' height='32' rx='7' fill='%23a78bfa'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e17;--card:#131827;--line:#222a3f;--ink:#e8ecf6;--mute:#8791ad;--acc:#ff5c7a}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "Space Grotesk",system-ui,sans-serif;min-height:100vh}
+button,select,input{font:inherit;color:inherit}button{cursor:pointer}
+:focus-visible{outline:2px solid #fff;outline-offset:2px}
+main{max-width:1100px;margin:0 auto;padding:24px 20px 40px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:20px}
+h1{font-size:28px;letter-spacing:-.03em;margin-right:auto}h1 span{color:var(--acc)}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 16px;font-weight:500}.btn:hover{border-color:var(--mute)}
+.play{background:var(--acc);border-color:var(--acc);color:#12060a;font-weight:700;min-width:110px;font-size:16px}.play.on{background:#fff;border-color:#fff}
+select{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-bottom:16px}
+.ctl label{display:grid;gap:4px;color:var(--mute);font-size:13px}.ctl b{color:var(--ink);font-variant-numeric:tabular-nums}.ctl input{width:100%;accent-color:var(--acc)}
+canvas{width:100%;height:64px;display:block;margin-bottom:16px;border-radius:10px;background:#0f1424}
+#heads,.row{display:grid;grid-template-columns:96px repeat(16,1fr);gap:5px;align-items:center}
+.row{margin-bottom:5px}#heads{margin-bottom:8px}
+#heads i{height:5px;border-radius:3px;background:var(--line)}#heads i.now{background:#fff}
+.lab{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--c)}
+.lab button{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:none;color:var(--mute);font-size:11px;padding:0}
+.lab button[aria-pressed=true]{background:var(--mute);color:#000}
+.c{aspect-ratio:1;min-height:28px;border-radius:7px;border:1px solid var(--line);background:#0f1424;color:#0b0e17;font-weight:700;font-size:13px;padding:0;touch-action:none}
+.c.g{background:#171d31}.c.on{background:var(--c);border-color:var(--c)}.c.now{outline:2px solid #ffffff55}
+.c.on.now{filter:brightness(1.35)}.row.m .c.on{opacity:.3}
+.hint{color:var(--mute);font-size:13px;margin-top:14px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#fff;color:#000;padding:9px 16px;border-radius:9px;opacity:0;transition:opacity .25s;pointer-events:none}#toast.on{opacity:1}
+@media(max-width:700px){#heads,.row{grid-template-columns:62px repeat(16,1fr);gap:2px}.lab span{display:none}.c{min-height:18px;font-size:9px;border-radius:4px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Beat<span>box</span></h1>
+  <select id="pre" aria-label="Preset"></select>
+  <button class="btn" id="rnd">Randomise</button><button class="btn" id="clr">Clear</button>
+  <button class="btn" id="lnk">Copy link</button><button class="btn" id="wav">Export WAV</button>
+  <button class="btn play" id="play">Play</button>
+</header>
+<div class="panel">
+  <div class="ctl">
+    <label>Tempo <b id="bv"></b> BPM<input type="range" id="bpm" min="60" max="190"></label>
+    <label>Swing <b id="sv"></b>%<input type="range" id="swing" min="0" max="60"></label>
+    <label>Volume <b id="vv"></b>%<input type="range" id="vol" min="0" max="100"></label>
+  </div>
+  <canvas id="viz" aria-hidden="true"></canvas>
+  <div id="heads"></div><div id="grid"></div>
+  <p class="hint">Click or drag on a row to place drum hits. On Bass and Pluck, click a step again to change its note (1 to 5). <b>M</b> mutes a row. <b>Space</b> plays and stops.</p>
+</div>
+</main>
+<div id="toast" role="status"></div>
+<script>
+const $=s=>document.querySelector(s);
+const TR=[["kick","Kick","#ff5c7a"],["snare","Snare","#ffb347"],["clap","Clap","#ffe66d"],["hat","Hat","#7ee8a8"],["open","Open hat","#4fd1c5"],["tom","Tom","#63b3ed"],["bass","Bass","#a78bfa",1],["pluck","Pluck","#f472b6",1]];
+const PAN={kick:0,snare:0,clap:-.15,hat:-.3,open:.3,tom:.2,bass:0,pluck:.25},SCALE=[0,3,5,7,10],LEN=16;
+const row=s=>[...s.padEnd(LEN,".")].slice(0,LEN).map(c=>c==="x"?1:c==="."?0:+c||0);
+const PRE={
+ "House":{bpm:124,swing:0,kick:"x...x...x...x...",snare:"",clap:"....x.......x...",hat:"x.x.x.x.x.x.x.x.",open:"..x...x...x...x.",tom:"",bass:"1..1..2.1..1..3.",pluck:"....3.......4..."},
+ "Hip-hop":{bpm:90,swing:35,kick:"x.....x...x.....",snare:"....x.......x...",clap:"",hat:"x.x.x.x.x.x.x.x.",open:"..............x.",tom:"",bass:"1.....2...1..3..",pluck:"......4.......2."},
+ "Drum and bass":{bpm:174,swing:0,kick:"x.........x.....",snare:"....x.......x...",clap:"",hat:"x.x.x.x.x.x.x.x.",open:".......x.......x",tom:"",bass:"1.....2...3.....",pluck:"..4.....5......."},
+ "Trap":{bpm:140,swing:0,kick:"x.....x..x......",snare:"........x.......",clap:"........x.......",hat:"x.x.x.xxx.x.x.xx",open:"......x.......x.",tom:"",bass:"1.......2.....3.",pluck:"....5.......4..."},
+ "Funk":{bpm:104,swing:22,kick:"x..x..x...x..x..",snare:"....x..x.x..x...",clap:"",hat:"xxxxxxxxxxxxxxxx",open:"......x.......x.",tom:"..............x.",bass:"1..1..2..3..1.2.",pluck:"..3...3...5....."}};
+let S={bpm:120,swing:0,vol:80,pat:{},mute:{}};
+function load(name){const p=PRE[name];S.bpm=p.bpm;S.swing=p.swing;TR.forEach(([id])=>S.pat[id]=row(p[id]||""));S.mute={}}
+// ---------------------------------------------------------------- sound design (each voice: context, output, start time, note)
+const NB=new WeakMap();
+function noise(c){let b=NB.get(c);if(!b){b=c.createBuffer(1,c.sampleRate,c.sampleRate);const d=b.getChannelData(0);let s=7;for(let i=0;i<d.length;i++){s=(s*16807)%2147483647;d[i]=s/1073741823-1}NB.set(c,b)}return b}
+function nz(c,o,t,dur,type,f,q,g){const s=c.createBufferSource();s.buffer=noise(c);s.loop=true;const fl=c.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const a=c.createGain();a.gain.setValueAtTime(g,t);a.gain.exponentialRampToValueAtTime(.001,t+dur);s.connect(fl);fl.connect(a);a.connect(o);s.start(t);s.stop(t+dur+.02)}
+function osc(c,o,t,type,f0,f1,dur,g,lp){const x=c.createOscillator();x.type=type;x.frequency.setValueAtTime(f0,t);if(f1!==f0)x.frequency.exponentialRampToValueAtTime(f1,t+dur*.4);const a=c.createGain();a.gain.setValueAtTime(g,t);a.gain.exponentialRampToValueAtTime(.001,t+dur);let n=x;if(lp){const f=c.createBiquadFilter();f.type="lowpass";f.frequency.setValueAtTime(lp,t);f.frequency.exponentialRampToValueAtTime(120,t+dur);x.connect(f);n=f}n.connect(a);a.connect(o);x.start(t);x.stop(t+dur+.02)}
+const hz=(base,n)=>base*2**(SCALE[n-1]/12);
+const V={
+ kick:(c,o,t)=>osc(c,o,t,"sine",160,42,.5,1),
+ snare:(c,o,t)=>{nz(c,o,t,.2,"highpass",1800,1,.7);osc(c,o,t,"triangle",220,160,.12,.5)},
+ clap:(c,o,t)=>{[0,.011,.022].forEach(d=>nz(c,o,t+d,.03,"bandpass",1400,1.2,.6));nz(c,o,t+.033,.18,"bandpass",1400,1.2,.5)},
+ hat:(c,o,t)=>nz(c,o,t,.05,"highpass",7500,1,.35),
+ open:(c,o,t)=>nz(c,o,t,.3,"highpass",7000,1,.3),
+ tom:(c,o,t)=>osc(c,o,t,"sine",230,110,.35,.9),
+ bass:(c,o,t,n)=>osc(c,o,t,"sawtooth",hz(55,n),hz(55,n),.4,.8,1100),
+ pluck:(c,o,t,n)=>osc(c,o,t,"square",hz(220,n),hz(220,n),.3,.22,3500)};
+function chain(c){const m=c.createGain();m.gain.value=S.vol/100;const k=c.createDynamicsCompressor();k.threshold.value=-12;k.ratio.value=5;m.connect(k);return{in:m,out:k}}
+function hit(c,out,i,t){TR.forEach(([id])=>{const v=S.pat[id][i];if(!v||S.mute[id])return;const p=c.createStereoPanner();p.pan.value=PAN[id];p.connect(out);V[id](c,p,t,v)})}
+// ---------------------------------------------------------------- live playback (look-ahead scheduler)
+let ctx,mst,an,playing=false,step=0,next=0,timer,queue=[],cur=-1,raf;
+const sixteenth=()=>60/S.bpm/4;
+function tick(){while(next<ctx.currentTime+.12){const t=next+(step%2?sixteenth()*S.swing/100*.66:0);hit(ctx,mst.in,step,t);queue.push({s:step,t});next+=sixteenth();step=(step+1)%LEN}}
+function start(){ctx=ctx||new(window.AudioContext||window.webkitAudioContext)();ctx.resume();if(!mst){mst=chain(ctx);an=ctx.createAnalyser();an.fftSize=128;mst.out.connect(an);an.connect(ctx.destination)}
+ playing=true;step=0;queue=[];next=ctx.currentTime+.06;timer=setInterval(tick,25);raf=requestAnimationFrame(frame);$("#play").textContent="Stop";$("#play").classList.add("on")}
+function stop(){playing=false;clearInterval(timer);cancelAnimationFrame(raf);mark(-1);$("#play").textContent="Play";$("#play").classList.remove("on");draw(true)}
+function frame(){while(queue.length&&queue[0].t<=ctx.currentTime)mark(queue.shift().s);draw();if(playing)raf=requestAnimationFrame(frame)}
+// ---------------------------------------------------------------- export (same voices, rendered offline)
+function wavBlob(buf){const n=buf.length,d=new DataView(new ArrayBuffer(44+n*4)),L=buf.getChannelData(0),R=buf.numberOfChannels>1?buf.getChannelData(1):L;let pk=0;for(let i=0;i<n;i++)pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));const g=pk>0?.9/pk:1;
+ const w=(o,s)=>[...s].forEach((ch,i)=>d.setUint8(o+i,ch.charCodeAt(0)));w(0,"RIFF");d.setUint32(4,36+n*4,true);w(8,"WAVEfmt ");d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,2,true);d.setUint32(24,buf.sampleRate,true);d.setUint32(28,buf.sampleRate*4,true);d.setUint16(32,4,true);d.setUint16(34,16,true);w(36,"data");d.setUint32(40,n*4,true);
+ for(let i=0;i<n;i++){d.setInt16(44+i*4,Math.max(-1,Math.min(1,L[i]*g))*32767,true);d.setInt16(46+i*4,Math.max(-1,Math.min(1,R[i]*g))*32767,true)}return new Blob([d],{type:"audio/wav"})}
+async function render(bars=4){const sr=44100,sx=sixteenth(),dur=bars*LEN*sx+1.5,oc=new(window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,Math.ceil(sr*dur),sr),m=chain(oc);m.out.connect(oc.destination);
+ for(let b=0;b<bars;b++)for(let i=0;i<LEN;i++)hit(oc,m.in,i,.05+(b*LEN+i)*sx+(i%2?sx*S.swing/100*.66:0));return oc.startRendering()}
+async function exportWav(){try{toast("Rendering...");const blob=wavBlob(await render()),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`beatbox-${S.bpm}bpm.wav`;a.click();toast("Saved a 4-bar WAV")}catch(e){toast("Export isn't supported in this browser")}}
+// ---------------------------------------------------------------- interface
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("on"),1800)}
+const cells={},heads=[];
+function build(){$("#heads").innerHTML="<span></span>"+"<i></i>".repeat(LEN);heads.push(...$("#heads").querySelectorAll("i"));
+ $("#grid").innerHTML=TR.map(([id,name,col,pit])=>`<div class="row" id="r-${id}" style="--c:${col}"><div class="lab"><button data-m="${id}" aria-pressed="false" aria-label="Mute ${name}">M</button><span>${name}</span></div>${[...Array(LEN)].map((_,i)=>`<button class="c ${i>>2&1?"g":""}" data-t="${id}" data-i="${i}" aria-label="${name} step ${i+1}"></button>`).join("")}</div>`).join("");
+ TR.forEach(([id])=>cells[id]=[...document.querySelectorAll(`[data-t=${id}]`)]);
+ $("#pre").innerHTML=Object.keys(PRE).map(n=>`<option>${n}</option>`).join("")}
+function paint(){TR.forEach(([id,,,pit])=>cells[id].forEach((el,i)=>{const v=S.pat[id][i];el.classList.toggle("on",!!v);el.textContent=pit&&v?v:"";el.setAttribute("aria-pressed",!!v)}));
+ TR.forEach(([id])=>{$("#r-"+id).classList.toggle("m",!!S.mute[id]);$(`[data-m=${id}]`).setAttribute("aria-pressed",!!S.mute[id])});
+ $("#bpm").value=S.bpm;$("#swing").value=S.swing;$("#vol").value=S.vol;$("#bv").textContent=S.bpm;$("#sv").textContent=S.swing;$("#vv").textContent=S.vol}
+function mark(i){if(cur>=0){heads[cur].classList.remove("now");TR.forEach(([id])=>cells[id][cur].classList.remove("now"))}cur=i;if(i>=0){heads[i].classList.add("now");TR.forEach(([id])=>cells[id][i].classList.add("now"))}}
+const vz=$("#viz"),vx=vz.getContext("2d");
+function draw(clear){const w=vz.width=vz.clientWidth*(devicePixelRatio||1),h=vz.height=vz.clientHeight*(devicePixelRatio||1);vx.clearRect(0,0,w,h);if(clear||!an)return;const a=new Uint8Array(an.frequencyBinCount);an.getByteFrequencyData(a);const n=a.length*.75|0,bw=w/n;for(let i=0;i<n;i++){const v=a[i]/255*h;vx.fillStyle=`hsl(${350-i*4},90%,65%)`;vx.fillRect(i*bw+1,h-v,bw-2,v)}}
+function save(){try{history.replaceState(null,"","#"+new URLSearchParams({b:S.bpm,s:S.swing,...Object.fromEntries(TR.map(([id])=>[id,S.pat[id].join("")]))}))}catch(e){}}
+function restore(){const q=new URLSearchParams(location.hash.slice(1));if(!q.has("b"))return false;S.bpm=Math.min(190,Math.max(60,+q.get("b")||120));S.swing=Math.min(60,Math.max(0,+q.get("s")||0));TR.forEach(([id])=>{const v=q.get(id)||"";S.pat[id]=[...v.padEnd(LEN,"0")].slice(0,LEN).map(c=>Math.min(5,+c||0))});return true}
+let paintTo=null;
+$("#grid").addEventListener("pointerdown",e=>{const m=e.target.closest("[data-m]");if(m){S.mute[m.dataset.m]=!S.mute[m.dataset.m];paint();return}
+ const c=e.target.closest(".c");if(!c)return;e.preventDefault();const id=c.dataset.t,i=+c.dataset.i,pit=TR.find(t=>t[0]===id)[3],old=S.pat[id][i];
+ S.pat[id][i]=pit?(old+1)%6:old?0:1;paintTo=pit?null:{id,v:S.pat[id][i]};paint();save()});
+$("#grid").addEventListener("pointerover",e=>{const c=e.target.closest(".c");if(!paintTo||!c||c.dataset.t!==paintTo.id||!(e.buttons&1))return;S.pat[paintTo.id][+c.dataset.i]=paintTo.v;paint();save()});
+addEventListener("pointerup",()=>paintTo=null);
+$("#play").onclick=()=>playing?stop():start();
+$("#pre").onchange=e=>{load(e.target.value);paint();save()};
+$("#bpm").oninput=e=>{S.bpm=+e.target.value;paint();save()};$("#swing").oninput=e=>{S.swing=+e.target.value;paint();save()};
+$("#vol").oninput=e=>{S.vol=+e.target.value;if(mst)mst.in.gain.value=S.vol/100;paint()};
+$("#clr").onclick=()=>{TR.forEach(([id])=>S.pat[id]=Array(LEN).fill(0));paint();save()};
+$("#rnd").onclick=()=>{const r=Math.random,pick=(p)=>Array.from({length:LEN},(_, i)=>r()<p(i)?1:0);
+ S.pat.kick=pick(i=>i%8===0?1:i%4===0?.5:.12);S.pat.snare=pick(i=>i%8===4?1:.06);S.pat.clap=pick(i=>i%8===4?.4:.04);S.pat.hat=pick(i=>i%2===0?.8:.3);S.pat.open=pick(i=>i%4===2?.35:0);S.pat.tom=pick(()=>.06);
+ ["bass","pluck"].forEach((id,k)=>S.pat[id]=pick(i=>k?(i%4===2?.4:.1):(i%4===0?.55:.1)).map(v=>v?1+Math.floor(r()*5):0));paint();save()};
+$("#lnk").onclick=()=>{save();(navigator.clipboard?navigator.clipboard.writeText(location.href):Promise.reject()).then(()=>toast("Link copied: it opens this exact beat")).catch(()=>toast("Copy the address bar to share this beat"))};
+$("#wav").onclick=exportWav;
+document.onkeydown=e=>{if(e.code==="Space"&&!/SELECT|INPUT/.test(e.target.tagName)){e.preventDefault();$("#play").click()}};
+build();load("House");restore();paint();draw(true);
+</script>
+</body>
+</html>
